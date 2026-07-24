@@ -41,16 +41,27 @@ ${(text || '').slice(0, 3000)}`
   } else if (mode === 'policy') {
     body = {
       model: 'claude-sonnet-4-6',
-      max_tokens: 800,
+      max_tokens: 2000,
       messages: [{
         role: 'user',
-        content: `Look up the current return policy for "${store}" and note any common credit card purchase-protection or extended-warranty benefits (e.g. Chase Sapphire Reserve, Amex Platinum) that typically apply to purchases there. Respond with your findings, then end with ONLY a JSON object on its own line, no markdown fences:
+        content: `Search the web for the current return policy of the retailer "${store}", and note any common credit card purchase-protection or extended-warranty benefits (e.g. Chase Sapphire Reserve, Amex Platinum) that typically apply to purchases there. Keep your research notes brief. Your final message MUST end with this JSON object on its own line — no markdown fences, nothing after it:
 {"returnWindowDays": number, "policyNote": "one sentence, current as of your search", "cardBenefitNote": "one sentence on common card protections, or empty string"}`
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search' }]
     };
   } else {
     return res.status(400).json({ error: 'unknown mode' });
+  }
+
+  // Pull a policy JSON object out of possibly-chatty text
+  function extractPolicyJson(text) {
+    if (!text) return null;
+    const matches = text.match(/\{[^{}]*"returnWindowDays"[^{}]*\}/g);
+    if (!matches) return null;
+    for (let i = matches.length - 1; i >= 0; i--) {
+      try { return JSON.parse(matches[i]); } catch { /* try earlier match */ }
+    }
+    return null;
   }
 
   try {
@@ -66,7 +77,38 @@ ${(text || '').slice(0, 3000)}`
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data });
 
-    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    let textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+
+    if (mode === 'policy') {
+      let policy = extractPolicyJson(textBlocks);
+
+      // Fallback: web search failed or the answer got mangled — ask again
+      // without search, using Claude's built-in knowledge, clearly caveated.
+      if (!policy) {
+        const r2 = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 400,
+            messages: [{
+              role: 'user',
+              content: `From your general knowledge, what is the typical return policy for the retailer "${store}", and what common credit card purchase protections usually apply? Respond with ONLY this JSON object, no markdown fences, no other text:
+{"returnWindowDays": number, "policyNote": "one sentence; note this is typical policy and may have changed — verify with the store", "cardBenefitNote": "one sentence on common card protections, or empty string"}`
+            }]
+          })
+        });
+        const data2 = await r2.json();
+        if (r2.ok) {
+          const text2 = (data2.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+          policy = extractPolicyJson(text2);
+        }
+      }
+
+      if (policy) return res.status(200).json({ raw: JSON.stringify(policy) });
+      return res.status(200).json({ raw: textBlocks });
+    }
+
     return res.status(200).json({ raw: textBlocks });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
