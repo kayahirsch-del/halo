@@ -42,6 +42,27 @@
     font-weight:650;margin-top:12px;display:none;line-height:1.5;}
   .authbanner.show{display:block;}
 
+  /* ---- sign up / log in screen ---- */
+  #s-authgate{display:none;flex-direction:column;justify-content:center;align-items:center;padding:0 28px;
+    min-height:100vh;flex:1;text-align:center;}
+  #s-authgate.active{display:flex;}
+  .auth-mark{width:64px;height:64px;border-radius:50%;border:5px solid transparent;
+    background:linear-gradient(var(--bg),var(--bg)) padding-box, var(--grad) border-box;margin-bottom:18px;}
+  #s-authgate h1{font-size:27px;font-weight:800;letter-spacing:-.5px;}
+  #s-authgate p{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.5;max-width:300px;}
+  .authform{width:100%;max-width:320px;margin-top:26px;}
+  .authform input{width:100%;padding:13px 15px;border-radius:14px;border:1.5px solid var(--line);
+    font-size:15px;font-family:inherit;margin-top:10px;background:#fff;color:var(--ink);}
+  .authform input:focus{outline:none;border-color:var(--gold);}
+  .authform .bigbtn{margin-top:16px;}
+  .authswitch{font-size:13px;color:var(--muted);margin-top:18px;}
+  .authswitch b{color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;}
+  .authmsg{font-size:12.5px;font-weight:650;margin-top:14px;min-height:16px;}
+  .authmsg.err{color:var(--red);}
+  .authmsg.ok{color:var(--sage);}
+  .signout{position:absolute;top:20px;right:18px;font-size:12px;color:var(--muted);font-weight:600;
+    cursor:pointer;background:none;border:none;font-family:inherit;z-index:10;}
+
   .tally{background:var(--card);border-radius:24px;padding:22px 20px;margin-top:12px;text-align:center;
     box-shadow:0 8px 26px rgba(30,25,10,.06);}
   .tally .amt{font-size:40px;font-weight:800;letter-spacing:-1.5px;
@@ -173,7 +194,21 @@
 <body>
 <div id="app">
 
-  <div class="screen active" id="s-log">
+  <div id="s-authgate">
+    <div class="auth-mark"></div>
+    <h1>Halo</h1>
+    <p id="authgate-sub">Create an account to start tracking your store credit, gift cards, return windows, and warranties.</p>
+    <div class="authform">
+      <input type="email" id="auth-email" placeholder="Email" autocomplete="email">
+      <input type="password" id="auth-password" placeholder="Password" autocomplete="new-password">
+      <button class="bigbtn grad" id="authgate-btn" onclick="submitAuth()">Create account</button>
+      <div class="authmsg" id="authgate-msg"></div>
+      <div class="authswitch" id="authgate-switch">Already have an account? <b onclick="toggleAuthMode()">Log in</b></div>
+    </div>
+  </div>
+
+  <div class="screen" id="s-log">
+    <button class="signout" onclick="signOut()">Sign out</button>
     <div class="header"><div><div class="greet">Halo</div><h1>Log</h1></div></div>
     <div class="authbanner" id="authBanner">Couldn't connect to your account. If this keeps happening, enable "Allow anonymous sign-ins" in your Supabase project's Authentication settings.</div>
 
@@ -266,9 +301,9 @@
 
   <div id="toast"></div>
   <div id="overlay" onclick="if(event.target===this)closeDetail()"><div class="sheet" id="sheet"></div></div>
-  <div class="fab" onclick="go('add')">+</div>
+  <div class="fab" id="fab" style="display:none;" onclick="go('add')">+</div>
 
-  <div class="tabbar">
+  <div class="tabbar" id="tabbar" style="display:none;">
     <button class="tab on" data-s="log" onclick="go('log')"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9.5 14h5" stroke-linecap="round"/></svg><span>Log</span></button>
     <button class="tab" data-s="add" onclick="go('add')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg><span>Add</span></button>
   </div>
@@ -284,19 +319,84 @@ let state = { items: [] };
 async function initSupabase(){
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   try{
-    let { data:{ session } } = await sb.auth.getSession();
-    if(!session){
-      const { data, error } = await sb.auth.signInAnonymously();
-      if(error) throw error;
-      session = data.session;
-    }
-    currentUserId = session.user.id;
-    return true;
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ currentUserId = session.user.id; return true; }
+    return false;
   }catch(e){
     console.error("Auth error", e);
-    document.getElementById("authBanner").classList.add("show");
     return false;
   }
+}
+
+let authMode = "signup"; // or "login"
+function toggleAuthMode(){
+  authMode = authMode === "signup" ? "login" : "signup";
+  document.getElementById("authgate-btn").textContent = authMode === "signup" ? "Create account" : "Log in";
+  document.getElementById("authgate-sub").textContent = authMode === "signup"
+    ? "Create an account to start tracking your store credit, gift cards, return windows, and warranties."
+    : "Welcome back.";
+  document.getElementById("authgate-switch").innerHTML = authMode === "signup"
+    ? 'Already have an account? <b onclick="toggleAuthMode()">Log in</b>'
+    : 'New here? <b onclick="toggleAuthMode()">Create an account</b>';
+  document.getElementById("authgate-msg").textContent = "";
+}
+
+async function submitAuth(){
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value;
+  const msg = document.getElementById("authgate-msg");
+  const btn = document.getElementById("authgate-btn");
+  msg.className = "authmsg";
+  if(!email || !password){ msg.textContent = "Enter an email and password."; msg.classList.add("err"); return; }
+  if(password.length < 6){ msg.textContent = "Password needs to be at least 6 characters."; msg.classList.add("err"); return; }
+
+  btn.disabled = true;
+  btn.textContent = "One sec…";
+  try{
+    if(authMode === "signup"){
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if(error) throw error;
+      if(data.session){
+        currentUserId = data.session.user.id;
+        await enterApp();
+      } else {
+        msg.textContent = "Check your email to confirm your account, then log in.";
+        msg.classList.add("ok");
+        btn.disabled = false; btn.textContent = "Create account";
+      }
+    } else {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      currentUserId = data.session.user.id;
+      await enterApp();
+    }
+  }catch(e){
+    msg.textContent = e.message || "Something went wrong.";
+    msg.classList.add("err");
+    btn.disabled = false;
+    btn.textContent = authMode === "signup" ? "Create account" : "Log in";
+  }
+}
+
+async function enterApp(){
+  document.getElementById("s-authgate").classList.remove("active");
+  document.getElementById("fab").style.display = "";
+  document.getElementById("tabbar").style.display = "";
+  go("log");
+  await loadAll();
+  render();
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  currentUserId = null;
+  state.items = [];
+  document.getElementById("fab").style.display = "none";
+  document.getElementById("tabbar").style.display = "none";
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("s-authgate").classList.add("active");
+  document.getElementById("auth-email").value = "";
+  document.getElementById("auth-password").value = "";
 }
 
 async function getAccessToken(){
@@ -754,13 +854,20 @@ function copyText(t){
 
 /* ============ boot ============ */
 (async ()=>{
-  const ok = await initSupabase();
-  if(ok) await loadAll();
-  render();
-  if(new URLSearchParams(location.search).get('gmail')==='connected'){
-    toast("Gmail connected ✓");
-    history.replaceState({}, '', location.pathname);
-    go('add'); startScan();
+  const hasSession = await initSupabase();
+  if(hasSession){
+    document.getElementById("fab").style.display = "";
+    document.getElementById("tabbar").style.display = "";
+    go("log");
+    await loadAll();
+    render();
+    if(new URLSearchParams(location.search).get('gmail')==='connected'){
+      toast("Gmail connected ✓");
+      history.replaceState({}, '', location.pathname);
+      go('add'); startScan();
+    }
+  } else {
+    document.getElementById("s-authgate").classList.add("active");
   }
   if('serviceWorker' in navigator){
     window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
