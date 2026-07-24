@@ -19,8 +19,12 @@ export default async function handler(req, res) {
       max_tokens: 500,
       messages: [{
         role: 'user',
-        content: `Classify this email as one of: store credit/refund issued ("credit"), gift card issued ("gift"), or a purchase/order confirmation implying a return window ("return"). Respond with ONLY valid JSON, no markdown:
-{"found":true|false,"kind":"credit"|"gift"|"return","store":"...","amount":0.00,"itemName":"main item, only for kind return","deadline":"YYYY-MM-DD if stated, else empty string","code":"any code mentioned, else empty string"}
+        content: `Classify this email as one of: store credit/refund issued ("credit"), gift card issued ("gift"), a purchase/order confirmation implying a return window ("return"), or an order confirmation where the payment section shows a retailer-specific stored balance being spent ("gift_redemption").
+
+For "gift_redemption": don't pattern-match the literal words "gift card" — every retailer names their own version differently. The concept is any payment line that's a balance issued BY that specific retailer/platform, redeemable only there, as opposed to a normal bank card, PayPal, or Apple Pay. Examples of the same underlying thing under different names: "Gift Card: -$18.00", "Store Credit Applied", "Uber Cash" as the payment method, "Starbucks Card", "Amazon Gift Card Balance", a rewards/loyalty balance used as payment. Judge by what the payment section actually shows, not by whether it says "gift card."
+
+Respond with ONLY valid JSON, no markdown:
+{"found":true|false,"kind":"credit"|"gift"|"return"|"gift_redemption","store":"...","amount":0.00,"itemName":"main item, only for kind return","deadline":"YYYY-MM-DD if stated, else empty string","code":"any code mentioned, else empty string"}
 Today's date is ${today}. Email:
 ${(text || '').slice(0, 3000)}`
       }]
