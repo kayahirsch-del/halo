@@ -20,8 +20,6 @@ function decodeBody(payload) {
   return '';
 }
 
-// ---- Real Gmail tool implementations, called by Claude mid-conversation ----
-
 async function searchGmail(accessToken, query, maxResults = 10) {
   const listRes = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${Math.min(maxResults, 20)}`,
@@ -32,7 +30,6 @@ async function searchGmail(accessToken, query, maxResults = 10) {
   const ids = (listData.messages || []).map(m => m.id);
   if (!ids.length) return { count: 0, messages: [] };
 
-  // metadata-only fetch (fast, no body decode) so Claude can triage before reading in full
   const results = await Promise.all(ids.map(async (id) => {
     const mRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
@@ -71,11 +68,11 @@ async function readEmail(accessToken, messageId) {
 const TOOLS = [
   {
     name: 'search_gmail',
-    description: "Search the user's real Gmail inbox using Gmail's search syntax (e.g. 'category:updates newer_than:150d', 'from:aritzia.com', '\"gift card\"'). Returns matching messages with id, subject, from, date, and a short snippet — not the full body.",
+    description: "Search the user's real Gmail inbox using Gmail's search syntax. Wrap OR groups in parentheses, e.g. '(receipt OR order OR return OR refund) newer_than:150d', or 'category:updates newer_than:150d', or 'from:aritzia.com'. Returns matching messages with id, subject, from, date, and a short snippet — not the full body.",
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'A Gmail search query' },
+        query: { type: 'string', description: 'A Gmail search query, using parentheses around any OR groups' },
         max_results: { type: 'integer', description: 'Max messages to return, default 10, max 20' }
       },
       required: ['query']
@@ -92,13 +89,21 @@ const TOOLS = [
   }
 ];
 
-async function callClaude(messages, key) {
+async function callClaude(messages, key, withTools) {
+  const body = { model: 'claude-sonnet-4-6', max_tokens: 2000, messages };
+  if (withTools) body.tools = TOOLS;
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, tools: TOOLS, messages })
+    body: JSON.stringify(body)
   });
   return r.json();
+}
+
+function extractJsonArray(text) {
+  const match = (text || '').match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try { return JSON.parse(match[0]); } catch { return []; }
 }
 
 export default async function handler(req, res) {
@@ -149,28 +154,31 @@ export default async function handler(req, res) {
     role: 'user',
     content: `You're an agent with real access to a Gmail inbox, via the search_gmail and read_email tools. Your job: find genuine order confirmations (implying a return window), return/refund-processed notices (store credit issued), and gift card emails from roughly the last 5 months. Today's date is ${today}.
 
-Don't rely on one search. Try a few different angles — e.g. category:updates newer_than:150d for a broad first pass, then targeted terms like receipt, "order confirmation", "your order", "return", "refund", "store credit", "gift card" if the first pass looks thin. Use read_email on genuinely promising candidates to confirm details and extract accurate amounts/dates — don't read everything, use the subject/snippet from search results to triage first. You have a limited number of tool calls, so be efficient: a few well-chosen searches plus reading the real candidates beats exhaustively reading everything.
+Gmail search tips: wrap OR groups in parentheses, e.g. (receipt OR order OR "order confirmation" OR return OR refund) newer_than:150d. category:updates newer_than:150d is a good broad first pass since retail receipts usually land there. Try at least 2-3 different searches from different angles before concluding there's nothing — a single search missing results doesn't mean the inbox is empty. Use read_email on genuinely promising candidates (based on subject/snippet) to confirm details and extract accurate amounts/dates.
 
 When you're confident you've covered the inbox well, respond with ONLY a JSON array (no markdown fences, no other text), even if empty:
 [{"kind":"credit"|"gift"|"return","store":"...","amount":0.00,"itemName":"(only for kind return)","deadline":"YYYY-MM-DD (only for kind return; estimate 30 days out if the policy isn't stated)","code":""}]`
   }];
 
-  let finalText = '';
-  const MAX_TURNS = 6;
+  const MAX_TURNS = 10;
+  let items = [];
 
   try {
+    let answered = false;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const data = await callClaude(messages, key);
+      const data = await callClaude(messages, key, true);
       if (data.error) return res.status(500).json({ error: data.error });
 
       const toolUses = (data.content || []).filter(b => b.type === 'tool_use');
       const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-      if (textBlocks) finalText = textBlocks;
 
-      if (!toolUses.length) break;
+      if (!toolUses.length) {
+        items = extractJsonArray(textBlocks);
+        answered = true;
+        break;
+      }
 
       messages.push({ role: 'assistant', content: data.content });
-
       const toolResults = await Promise.all(toolUses.map(async (tu) => {
         let result;
         try {
@@ -185,8 +193,18 @@ When you're confident you've covered the inbox well, respond with ONLY a JSON ar
       messages.push({ role: 'user', content: toolResults });
     }
 
-    const match = finalText.match(/\[[\s\S]*\]/);
-    const items = match ? JSON.parse(match[0]) : [];
+    // Ran out of turns while Claude was still investigating — force one final,
+    // tool-free answer instead of silently returning nothing.
+    if (!answered) {
+      messages.push({
+        role: 'user',
+        content: "You're out of tool-call budget. Based on everything you've found so far, respond now with ONLY the JSON array — no more searching, no other text."
+      });
+      const data = await callClaude(messages, key, false);
+      const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+      items = extractJsonArray(textBlocks);
+    }
+
     return res.status(200).json({ items });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
