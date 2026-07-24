@@ -152,12 +152,17 @@ export default async function handler(req, res) {
 
   let messages = [{
     role: 'user',
-    content: `You're an agent with real access to a Gmail inbox, via the search_gmail and read_email tools. Your job: find genuine order confirmations (implying a return window), return/refund-processed notices (store credit issued), and gift card emails from roughly the last 5 months. Today's date is ${today}.
+    content: `You're an agent with real access to a Gmail inbox, via the search_gmail and read_email tools. Your job: find genuine order confirmations (implying a return window), return/refund-processed notices (store credit issued), gift card emails, AND order confirmations where the payment section shows a retailer-specific stored balance being spent.
 
-Gmail search tips: wrap OR groups in parentheses, e.g. (receipt OR order OR "order confirmation" OR return OR refund) newer_than:150d. category:updates newer_than:150d is a good broad first pass since retail receipts usually land there. Try at least 2-3 different searches from different angles before concluding there's nothing — a single search missing results doesn't mean the inbox is empty. Use read_email on genuinely promising candidates (based on subject/snippet) to confirm details and extract accurate amounts/dates.
+That last category is the subtle one — every retailer names their own version of it differently, so don't pattern-match on the literal words "gift card." The concept: any payment line that is a balance issued BY that specific retailer or platform, redeemable only there — as opposed to a normal bank card, PayPal, or Apple Pay. Examples of what this looks like on a real receipt, all the same underlying thing: "Gift Card: -$18.00", "Store Credit Applied", "Uber Cash" as the payment method, "Starbucks Card", "Amazon Gift Card Balance", a rewards/loyalty balance used as payment. Read the actual payment/checkout section of each candidate email and judge whether a balance like this was used — the label varies by company, the concept doesn't.
+
+Today's date is ${today}.
+
+Gmail search tips: wrap OR groups in parentheses, e.g. (receipt OR order OR "order confirmation" OR return OR refund) newer_than:150d. category:updates newer_than:150d is a good broad first pass since retail receipts usually land there. Try at least 2-3 different searches from different angles before concluding there's nothing — a single search missing results doesn't mean the inbox is empty. Use read_email on genuinely promising candidates (based on subject/snippet) to confirm details and extract accurate amounts/dates — this matters especially for spotting a gift-card-payment line, since that's usually buried in a totals/payment section, not the subject.
 
 When you're confident you've covered the inbox well, respond with ONLY a JSON array (no markdown fences, no other text), even if empty:
-[{"kind":"credit"|"gift"|"return","store":"...","amount":0.00,"itemName":"(only for kind return)","deadline":"YYYY-MM-DD (only for kind return; estimate 30 days out if the policy isn't stated)","code":""}]`
+[{"kind":"credit"|"gift"|"return"|"gift_redemption","store":"...","amount":0.00,"itemName":"(only for kind return)","deadline":"YYYY-MM-DD (only for kind return; estimate 30 days out if the policy isn't stated)","code":""}]
+Use kind "gift_redemption" when a gift card was spent as payment on an order — amount is however much of the gift card was applied.`
   }];
 
   const MAX_TURNS = 10;
