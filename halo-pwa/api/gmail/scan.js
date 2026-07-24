@@ -161,11 +161,13 @@ When you're confident you've covered the inbox well, respond with ONLY a JSON ar
   }];
 
   const MAX_TURNS = 10;
+  const START = Date.now();
+  const TIME_BUDGET_MS = 38000; // leave room for the forced final answer + response
   let items = [];
 
   try {
     let answered = false;
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
+    for (let turn = 0; turn < MAX_TURNS && (Date.now() - START) < TIME_BUDGET_MS; turn++) {
       const data = await callClaude(messages, key, true);
       if (data.error) return res.status(500).json({ error: data.error });
 
@@ -193,7 +195,7 @@ When you're confident you've covered the inbox well, respond with ONLY a JSON ar
       messages.push({ role: 'user', content: toolResults });
     }
 
-    // Ran out of turns while Claude was still investigating — force one final,
+    // Out of time or turns while still investigating — force one final,
     // tool-free answer instead of silently returning nothing.
     if (!answered) {
       messages.push({
