@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Halo</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Halo">
+<meta name="theme-color" content="#1B1B20">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#F7F5F1;--card:#FFF;--ink:#1B1B20;--muted:#8B8A94;--line:#ECE8DF;
+    --gold:#E9B94D;--peach:#F2997F;--lilac:#B7A6E9;
+    --sage:#37714F;--sage-bg:#E7F1E8;--amber:#94660F;--amber-bg:#FBEFD7;--red:#B4453A;--red-bg:#FBE3DC;
+    --grad:linear-gradient(90deg,#E9B94D,#F2997F,#B7A6E9);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overscroll-behavior-y:none;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+    background:radial-gradient(800px 500px at 80% -5%,#F1E8D4 0%,transparent 55%),
+               radial-gradient(700px 500px at 0% 40%,#EAE6F4 0%,transparent 50%),var(--bg);
+    color:var(--ink);min-height:100vh;display:flex;justify-content:center;
+    padding-top:env(safe-area-inset-top);}
+  #app{width:100%;max-width:430px;min-height:100vh;display:flex;flex-direction:column;position:relative;}
+  .screen{flex:1;overflow-y:auto;padding:16px 18px calc(110px + env(safe-area-inset-bottom));display:none;-webkit-overflow-scrolling:touch;}
+  .screen.active{display:block;animation:fade .22s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;padding-top:6px;}
+  .header .greet{font-size:13px;color:var(--muted);font-weight:600;}
+  .header h1{font-size:25px;font-weight:800;letter-spacing:-.5px;}
+  .backbtn{width:34px;height:34px;border-radius:50%;background:var(--card);border:none;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(30,25,10,.08);cursor:pointer;}
+  .backbtn svg{width:18px;height:18px;stroke:var(--ink);fill:none;stroke-width:2.2;}
+
+  .authbanner{background:var(--red-bg);color:var(--red);border-radius:14px;padding:10px 13px;font-size:12px;
+    font-weight:650;margin-top:12px;display:none;line-height:1.5;}
+  .authbanner.show{display:block;}
+
+  .tally{background:var(--card);border-radius:24px;padding:22px 20px;margin-top:12px;text-align:center;
+    box-shadow:0 8px 26px rgba(30,25,10,.06);}
+  .tally .amt{font-size:40px;font-weight:800;letter-spacing:-1.5px;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .tally .lbl{font-size:12.5px;color:var(--muted);font-weight:650;margin-top:2px;}
+  .tally .split{display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:12px;color:#57565F;font-weight:600;}
+  .tally .split b{color:var(--ink);font-weight:800;}
+  .tally .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;}
+  .soonest{margin-top:14px;background:var(--amber-bg);border-radius:14px;padding:10px 13px;font-size:12.5px;
+    font-weight:650;color:var(--amber);text-align:left;display:flex;gap:8px;align-items:center;}
+  .soonest.urgent{background:var(--red-bg);color:var(--red);}
+
+  .sect{display:flex;justify-content:space-between;align-items:baseline;margin:20px 2px 10px;}
+  .sect h3{font-size:15px;font-weight:800;letter-spacing:-.2px;}
+  .sect span{font-size:12px;color:var(--muted);font-weight:600;cursor:pointer;}
+
+  .row{background:var(--card);border-radius:18px;padding:14px 15px;margin-bottom:9px;display:flex;gap:12px;
+    align-items:center;box-shadow:0 4px 14px rgba(30,25,10,.05);cursor:pointer;transition:transform .12s;}
+  .row:active{transform:scale(.98);}
+  .row.faded{opacity:.5;}
+  .icon{width:40px;height:40px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:800;color:#fff;}
+  .row .body{flex:1;min-width:0;}
+  .row .t{font-size:14px;font-weight:700;}
+  .row .s{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .typetag{display:inline-block;font-size:9.5px;font-weight:750;padding:2.5px 7px;border-radius:20px;margin-top:5px;}
+  .tag-credit{background:var(--sage-bg);color:var(--sage);}
+  .tag-gift{background:#EFEAFB;color:#6A56A8;}
+  .tag-return{background:var(--amber-bg);color:var(--amber);}
+  .tag-warranty{background:#E7EEF7;color:#2E5A8C;}
+  .row .amt{font-size:15px;font-weight:800;white-space:nowrap;}
+  .row .clockbadge{font-size:12px;font-weight:800;white-space:nowrap;padding:5px 10px;border-radius:20px;}
+  .cb-ok{background:var(--sage-bg);color:var(--sage);}
+  .cb-soon{background:var(--amber-bg);color:var(--amber);}
+  .cb-urgent{background:var(--red-bg);color:var(--red);}
+  .cb-gone{background:#EFEDE7;color:var(--muted);}
+
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:28px 20px;line-height:1.6;}
+
+  .fab{position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(190px);
+    width:56px;height:56px;border-radius:50%;background:var(--ink);color:#fff;border:none;font-size:26px;
+    box-shadow:0 10px 26px rgba(20,15,5,.3);cursor:pointer;z-index:60;display:flex;align-items:center;justify-content:center;}
+  @media(max-width:430px){.fab{transform:translateX(calc(50vw - 78px));}}
+
+  .method{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px;box-shadow:0 6px 20px rgba(30,25,10,.06);
+    cursor:pointer;display:flex;gap:14px;align-items:center;border:1.5px solid transparent;}
+  .method:active{border-color:var(--gold);}
+  .method .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;}
+  .method h4{font-size:14.5px;font-weight:800;}
+  .method p{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;}
+
+  .pastebox{width:100%;min-height:140px;border:1.5px dashed #D8D2C4;border-radius:18px;background:#FFFDF9;
+    padding:14px;font-size:13px;font-family:inherit;color:var(--ink);resize:vertical;line-height:1.5;}
+  .pastebox:focus{outline:none;border-color:var(--gold);}
+  .filebox{width:100%;border:1.5px dashed #D8D2C4;border-radius:18px;background:#FFFDF9;padding:22px;text-align:center;
+    cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;}
+  .filebox img{max-width:100%;border-radius:12px;margin-top:10px;}
+  .bigbtn{width:100%;border:none;border-radius:16px;padding:14px;font-size:14.5px;font-weight:800;font-family:inherit;
+    cursor:pointer;margin-top:11px;background:var(--ink);color:#fff;}
+  .bigbtn.grad{background:var(--grad);color:#1B1B20;}
+  .bigbtn.ghost{background:transparent;color:var(--muted);box-shadow:none;font-size:12.5px;padding:6px;margin-top:4px;}
+  .bigbtn:disabled{opacity:.5;}
+  .status{margin-top:11px;font-size:12.5px;font-weight:650;text-align:center;color:var(--muted);}
+
+  .field{margin-top:11px;}
+  .field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;}
+  .field input,.field select{width:100%;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);
+    font-size:14px;font-family:inherit;margin-top:5px;background:#fff;color:var(--ink);}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--gold);}
+  .review{background:var(--card);border-radius:20px;padding:17px;margin-top:14px;box-shadow:0 6px 20px rgba(30,25,10,.07);display:none;}
+  .review h4{font-size:14.5px;font-weight:800;color:var(--amber);}
+
+  .scanrow{display:flex;gap:10px;align-items:center;background:var(--card);border-radius:14px;padding:11px 13px;
+    margin-bottom:8px;box-shadow:0 3px 10px rgba(30,25,10,.05);cursor:pointer;}
+  .scanrow input{width:18px;height:18px;flex:none;}
+  .scanrow .t{font-size:13px;font-weight:700;}
+  .scanrow .s{font-size:11.5px;color:var(--muted);margin-top:1px;}
+
+  #overlay{position:fixed;inset:0;background:rgba(20,18,15,.5);z-index:100;display:none;align-items:flex-end;justify-content:center;}
+  #overlay.show{display:flex;}
+  .sheet{width:100%;max-width:430px;background:var(--bg);border-radius:26px 26px 0 0;padding:20px 20px calc(30px + env(safe-area-inset-bottom));
+    max-height:85vh;overflow-y:auto;animation:up .28s cubic-bezier(.2,1,.3,1);}
+  @keyframes up{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .sheet-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .sheet .store{font-size:19px;font-weight:800;letter-spacing:-.3px;}
+  .sheet .meta{font-size:12px;color:var(--muted);margin-top:2px;}
+  .closebtn{width:30px;height:30px;border-radius:50%;background:#EFEBE1;border:none;font-size:15px;color:var(--muted);cursor:pointer;}
+  .cardnum{background:linear-gradient(135deg,#1B1B20,#33313A);color:#fff;border-radius:16px;padding:16px;margin-top:14px;}
+  .cardnum .lbl{font-size:10px;color:#C9C6BE;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+  .cardnum .num{font-size:18px;font-weight:700;letter-spacing:1.4px;margin-top:4px;font-family:ui-monospace,Menlo,monospace;}
+  .cardnum .row2{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
+  .cardnum .pin{font-size:13px;font-weight:700;font-family:ui-monospace,Menlo,monospace;}
+  .copybtn{background:rgba(255,255,255,.14);border:none;color:#fff;border-radius:9px;padding:6px 10px;font-size:11px;
+    font-weight:700;cursor:pointer;font-family:inherit;}
+  .balrow{display:flex;justify-content:space-between;align-items:baseline;margin-top:16px;}
+  .balrow .big{font-size:26px;font-weight:800;letter-spacing:-.7px;}
+  .balrow .lbl{font-size:11.5px;color:var(--muted);font-weight:650;}
+  .uselog{display:flex;gap:8px;margin-top:12px;}
+  .uselog input{flex:1;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);font-size:14px;font-family:inherit;}
+  .uselog button{background:var(--ink);color:#fff;border:none;border-radius:12px;padding:0 15px;font-weight:750;font-size:13px;cursor:pointer;font-family:inherit;}
+  .history{margin-top:12px;}
+  .history .h-row{display:flex;justify-content:space-between;font-size:12px;color:#57565F;padding:5px 0;border-bottom:1px solid var(--line);}
+  .clockbig{text-align:center;margin-top:16px;padding:18px;border-radius:18px;}
+  .clockbig .num{font-size:34px;font-weight:800;letter-spacing:-1px;}
+  .clockbig .lbl{font-size:12px;font-weight:650;margin-top:3px;}
+  .archivebtn{width:100%;background:transparent;border:1.5px solid var(--line);color:#57565F;border-radius:14px;
+    padding:11px;font-size:13px;font-weight:700;margin-top:14px;cursor:pointer;font-family:inherit;}
+  .removebtn{width:100%;background:transparent;border:1.5px solid #E8B4B0;color:var(--red);border-radius:14px;
+    padding:11px;font-size:13px;font-weight:700;margin-top:9px;cursor:pointer;font-family:inherit;}
+  .donebtn{width:100%;background:var(--sage);color:#fff;border:none;border-radius:14px;
+    padding:12px;font-size:13.5px;font-weight:800;margin-top:14px;cursor:pointer;font-family:inherit;}
+
+  #toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(102px + env(safe-area-inset-bottom));
+    background:rgba(20,20,24,.94);color:#fff;padding:11px 17px;border-radius:16px;font-size:12.5px;font-weight:650;
+    opacity:0;pointer-events:none;transition:all .3s;z-index:200;max-width:340px;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.3);}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;
+    height:calc(78px + env(safe-area-inset-bottom));background:rgba(250,248,244,.88);backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);border-top:.5px solid rgba(0,0,0,.07);display:flex;justify-content:space-around;
+    padding:9px 20px 0;z-index:50;}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;
+    color:#9C9AA3;width:90px;font-family:inherit;}
+  .tab span{font-size:10px;font-weight:700;}
+  .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;}
+  .tab.on{color:#B0821F;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="screen active" id="s-log">
+    <div class="header"><div><div class="greet">Halo</div><h1>Log</h1></div></div>
+    <div class="authbanner" id="authBanner">Couldn't connect to your account. If this keeps happening, enable "Allow anonymous sign-ins" in your Supabase project's Authentication settings.</div>
+
+    <div class="tally">
+      <div class="amt" id="total">$0</div>
+      <div class="lbl">available right now</div>
+      <div class="split">
+        <span><i class="dot" style="background:var(--sage)"></i>Store credit <b id="splitCredit">$0</b></span>
+        <span><i class="dot" style="background:#6A56A8"></i>Gift cards <b id="splitGift">$0</b></span>
+      </div>
+      <div id="soonestBanner"></div>
+    </div>
+
+    <div class="sect"><h3>On the clock</h3><span id="clockCount"></span></div>
+    <div id="clockList"></div>
+
+    <div class="sect"><h3>Money available</h3><span id="moneyCount"></span></div>
+    <div id="moneyList"></div>
+
+    <div class="sect" id="doneSect" style="display:none;"><h3>Handled</h3><span onclick="toggleDone()" id="doneToggle">Show</span></div>
+    <div id="doneList" style="display:none;"></div>
+  </div>
+
+  <div class="screen" id="s-add">
+    <div class="header"><button class="backbtn" onclick="go('log')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div><h1 style="text-align:right">Add</h1></div><div style="width:34px"></div></div>
+
+    <div id="pickMethod" style="margin-top:14px;">
+      <div class="method" onclick="startScan()">
+        <div class="ic" style="background:#DCEEFB">🔍</div>
+        <div><h4>Scan my inbox</h4><p>Halo searches Gmail directly for receipts, returns & credits</p></div>
+      </div>
+      <div class="method" onclick="showMethod('email')">
+        <div class="ic" style="background:var(--sage-bg)">📧</div>
+        <div><h4>Paste one email</h4><p>For a specific receipt or return notice</p></div>
+      </div>
+      <div class="method" onclick="showMethod('photo')">
+        <div class="ic" style="background:#EFEAFB">📷</div>
+        <div><h4>Add a gift card photo</h4><p>Halo reads the number, PIN & balance off the card</p></div>
+      </div>
+      <div class="method" onclick="showMethod('warranty')">
+        <div class="ic" style="background:#E7EEF7">🛡️</div>
+        <div><h4>Log a warranty</h4><p>Item, purchase date, and coverage length</p></div>
+      </div>
+    </div>
+
+    <div id="scanFlow" style="display:none;">
+      <div class="status" id="scanStatus">👼 Halo is searching your inbox…</div>
+      <div id="scanResults" style="margin-top:12px;"></div>
+      <button class="bigbtn grad" id="scanImportBtn" style="display:none;" onclick="importScanned()">Add selected to Log</button>
+      <button class="bigbtn ghost" onclick="go('add')">Cancel</button>
+    </div>
+
+    <div id="emailFlow" style="display:none;">
+      <p class="status" style="text-align:left;margin:2px 2px 8px;">Paste the email below — a return confirmation, order receipt, or credit notice.</p>
+      <textarea class="pastebox" id="emailPaste" placeholder="Paste email text here…"></textarea>
+      <button class="bigbtn grad" onclick="parseEmail()">✨ Read it</button>
+      <button class="bigbtn ghost" onclick="loadDemoEmail()">Try a demo email</button>
+      <div class="status" id="emailStatus"></div>
+      <div class="review" id="emailReview"></div>
+    </div>
+
+    <div id="photoFlow" style="display:none;">
+      <label class="filebox" id="fileLabel">
+        📷 Tap to take a photo or choose from your library
+        <input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none;" onchange="onFile(event)">
+      </label>
+      <button class="bigbtn grad" id="readCardBtn" onclick="parsePhoto()" disabled>✨ Read card</button>
+      <div class="status" id="photoStatus"></div>
+      <div class="review" id="photoReview"></div>
+    </div>
+
+    <div id="warrantyFlow" style="display:none;">
+      <div class="field"><label>Item</label><input id="w_item" placeholder="e.g. AirPods Pro"></div>
+      <div class="field"><label>Store / brand</label><input id="w_store" placeholder="e.g. Apple"></div>
+      <div class="field"><label>Purchase date</label><input id="w_date" type="date"></div>
+      <div class="field"><label>Coverage length</label>
+        <select id="w_len">
+          <option value="90">90 days</option>
+          <option value="180">6 months</option>
+          <option value="365" selected>1 year</option>
+          <option value="730">2 years</option>
+          <option value="1095">3 years</option>
+        </select>
+      </div>
+      <div class="field"><label>Item value (optional)</label><input id="w_value" type="number" step="0.01" placeholder="0.00"></div>
+      <button class="bigbtn grad" onclick="saveWarranty()">Add to Log</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="overlay" onclick="if(event.target===this)closeDetail()"><div class="sheet" id="sheet"></div></div>
+  <div class="fab" onclick="go('add')">+</div>
+
+  <div class="tabbar">
+    <button class="tab on" data-s="log" onclick="go('log')"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9.5 14h5" stroke-linecap="round"/></svg><span>Log</span></button>
+    <button class="tab" data-s="add" onclick="go('add')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg><span>Add</span></button>
+  </div>
+</div>
+
+<script>
+/* ============ Supabase data layer ============ */
+const SUPABASE_URL = "https://xquowncywffexwomifjc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxdW93bmN5d2ZmZXh3b21pZmpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzUxNTIsImV4cCI6MjEwMDQxMTE1Mn0.UtYcFdPDxLUAMywelFR5O4BExp9cIxuj3vHfDqPU99A";
+let sb, currentUserId;
+let state = { items: [] };
+
+async function initSupabase(){
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  try{
+    let { data:{ session } } = await sb.auth.getSession();
+    if(!session){
+      const { data, error } = await sb.auth.signInAnonymously();
+      if(error) throw error;
+      session = data.session;
+    }
+    currentUserId = session.user.id;
+    return true;
+  }catch(e){
+    console.error("Auth error", e);
+    document.getElementById("authBanner").classList.add("show");
+    return false;
+  }
+}
+
+async function getAccessToken(){
+  const { data:{ session } } = await sb.auth.getSession();
+  return session?.access_token;
+}
+
+async function loadAll(){
+  const { data: items, error } = await sb.from('items').select('*, item_usage(*)').order('created_at',{ascending:false});
+  if(error){ console.error(error); return; }
+  state.items = items.map(r=>({
+    id:r.id, kind:r.kind, store:r.store, itemName:r.item_name, amount:r.amount, remaining:r.remaining,
+    value:r.amount, code:r.code, pin:r.pin, deadline:r.deadline, added:r.added_on, status:r.status,
+    history:(r.item_usage||[]).map(h=>({d:h.used_on, amt:parseFloat(h.amount)}))
+  }));
+}
+
+async function dbInsertItem(fields){
+  const row = { user_id: currentUserId, status:'active', ...fields };
+  const { error } = await sb.from('items').insert(row);
+  if(error){ console.error(error); toast("Couldn't save — check your connection"); return false; }
+  return true;
+}
+async function dbUpdateItem(id, patch){
+  const { error } = await sb.from('items').update(patch).eq('id', id);
+  if(error) console.error(error);
+}
+async function dbDeleteItem(id){
+  const { error } = await sb.from('items').delete().eq('id', id);
+  if(error) console.error(error);
+}
+async function dbLogUsage(itemId, amount){
+  const { error } = await sb.from('item_usage').insert({item_id:itemId, amount});
+  if(error) console.error(error);
+}
+
+const fmt$ = n => "$" + (Math.round((n||0)*100)/100).toLocaleString();
+function daysFromNow(n){ return new Date(Date.now()+n*86400000).toISOString().slice(0,10); }
+function daysLeft(dateStr){ return Math.ceil((new Date(dateStr).getTime()-Date.now())/86400000); }
+
+const RETURN_WINDOWS = {aritzia:30,zara:30,target:90,amazon:30,sephora:30,nordstrom:365,uniqlo:30,
+  nike:60,lululemon:30,"best buy":15,apple:14,everlane:30,madewell:30,ssense:14,revolve:30};
+
+const COLORS = {aritzia:"#C9A876",zara:"#1B1B20",sephora:"#000000",nordstrom:"#1B1B20",target:"#CC0000",
+  uniqlo:"#E4002B",lululemon:"#8B0000",apple:"#555",default:"#8B7FC7"};
+function colorFor(store){ return COLORS[(store||"").toLowerCase()] || COLORS.default; }
+function initials(store){ return (store||"?").trim().slice(0,2).toUpperCase(); }
+
+/* ============ render ============ */
+function render(){
+  const money = state.items.filter(i=>(i.kind==="credit"||i.kind==="gift") && i.remaining>0.004);
+  const clock = state.items.filter(i=>(i.kind==="return"||i.kind==="warranty") && i.status==="active" && daysLeft(i.deadline)>=0)
+    .sort((a,b)=>daysLeft(a.deadline)-daysLeft(b.deadline));
+  const done = state.items.filter(i=>{
+    if(i.kind==="credit"||i.kind==="gift") return i.remaining<=0.004;
+    return i.status!=="active" || daysLeft(i.deadline)<0;
+  });
+
+  const total = money.reduce((s,i)=>s+parseFloat(i.remaining||0),0);
+  document.getElementById("total").textContent = fmt$(total);
+  document.getElementById("splitCredit").textContent = fmt$(money.filter(i=>i.kind==="credit").reduce((s,i)=>s+parseFloat(i.remaining||0),0));
+  document.getElementById("splitGift").textContent = fmt$(money.filter(i=>i.kind==="gift").reduce((s,i)=>s+parseFloat(i.remaining||0),0));
+
+  const banner = document.getElementById("soonestBanner");
+  if(clock.length){
+    const soon = clock[0];
+    const dl = daysLeft(soon.deadline);
+    const urgent = dl<=3;
+    banner.innerHTML = `<div class="soonest ${urgent?'urgent':''}">⏳ ${soon.kind==='return'?'Return':'Warranty'} on ${soon.itemName||soon.store} ${dl<=0?'closes today':dl===1?'closes tomorrow':'closes in '+dl+' days'}</div>`;
+  } else { banner.innerHTML = ""; }
+
+  document.getElementById("clockCount").textContent = clock.length+" active";
+  document.getElementById("clockList").innerHTML = clock.length ? clock.map(renderClockRow).join("") :
+    `<div class="empty">Nothing on the clock. Scan your inbox or log a warranty to start tracking.</div>`;
+
+  document.getElementById("moneyCount").textContent = money.length+" active";
+  document.getElementById("moneyList").innerHTML = money.length ? money.map(renderMoneyRow).join("") :
+    `<div class="empty">No store credit or gift cards logged yet.</div>`;
+
+  document.getElementById("doneSect").style.display = done.length ? "flex" : "none";
+  document.getElementById("doneList").innerHTML = done.map(i=> (i.kind==="credit"||i.kind==="gift") ? renderMoneyRow(i) : renderClockRow(i)).join("");
+}
+
+function clockBadge(item){
+  const dl = daysLeft(item.deadline);
+  if(dl<0) return `<span class="clockbadge cb-gone">Expired</span>`;
+  if(dl<=3) return `<span class="clockbadge cb-urgent">${dl===0?'Today':dl+'d left'}</span>`;
+  if(dl<=14) return `<span class="clockbadge cb-soon">${dl}d left</span>`;
+  if(dl>60) return `<span class="clockbadge cb-ok">${Math.round(dl/30)}mo left</span>`;
+  return `<span class="clockbadge cb-ok">${dl}d left</span>`;
+}
+function renderClockRow(i){
+  const tag = i.kind==="return" ? `<span class="typetag tag-return">Return window</span>` : `<span class="typetag tag-warranty">Warranty</span>`;
+  const faded = i.status!=="active" || daysLeft(i.deadline)<0;
+  return `<div class="row ${faded?'faded':''}" onclick="openDetail('${i.id}')">
+    <div class="icon" style="background:${colorFor(i.store)}">${initials(i.store)}</div>
+    <div class="body"><div class="t">${i.itemName||i.store}</div><div class="s">${i.store}${i.value?' · '+fmt$(i.value):''}</div>${tag}</div>
+    ${clockBadge(i)}
+  </div>`;
+}
+function renderMoneyRow(i){
+  const tag = i.kind==="credit" ? `<span class="typetag tag-credit">Store credit</span>` : `<span class="typetag tag-gift">Gift card</span>`;
+  const used = i.remaining<=0.004;
+  return `<div class="row ${used?'faded':''}" onclick="openDetail('${i.id}')">
+    <div class="icon" style="background:${colorFor(i.store)}">${initials(i.store)}</div>
+    <div class="body"><div class="t">${i.store}</div><div class="s">Added ${i.added}</div>${tag}</div>
+    <div class="amt">${fmt$(i.remaining)}</div>
+  </div>`;
+}
+function toggleDone(){
+  const list = document.getElementById("doneList");
+  const btn = document.getElementById("doneToggle");
+  const showing = list.style.display !== "none";
+  list.style.display = showing ? "none" : "block";
+  btn.textContent = showing ? "Show" : "Hide";
+}
+
+/* ============ nav ============ */
+function go(name){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("s-"+name).classList.add("active");
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.s===name));
+  if(name==="add") resetAddFlow();
+}
+function resetAddFlow(){
+  document.getElementById("pickMethod").style.display="block";
+  ["emailFlow","photoFlow","warrantyFlow","scanFlow"].forEach(f=>document.getElementById(f).style.display="none");
+  document.getElementById("emailReview").style.display="none";
+  document.getElementById("photoReview").style.display="none";
+  document.getElementById("emailStatus").textContent="";
+  document.getElementById("photoStatus").textContent="";
+  document.getElementById("emailPaste").value="";
+  document.getElementById("fileLabel").innerHTML = '📷 Tap to take a photo or choose from your library<input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none;" onchange="onFile(event)">';
+  document.getElementById("readCardBtn").disabled = true;
+  document.getElementById("w_item").value=""; document.getElementById("w_store").value="";
+  document.getElementById("w_date").value=new Date().toISOString().slice(0,10); document.getElementById("w_value").value="";
+  document.getElementById("scanImportBtn").style.display="none";
+  document.getElementById("scanResults").innerHTML="";
+  window._photoData = null; window._scanFound = null;
+}
+function showMethod(m){ document.getElementById("pickMethod").style.display="none"; document.getElementById(m+"Flow").style.display="block"; }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* ============ inbox scan (real Gmail via OAuth) ============ */
+async function isGmailConnected(){
+  const { data, error } = await sb.from('google_tokens').select('user_id').maybeSingle();
+  return !error && !!data;
+}
+
+async function startScan(){
+  document.getElementById("pickMethod").style.display="none";
+  document.getElementById("scanFlow").style.display="block";
+  const status = document.getElementById("scanStatus");
+  const results = document.getElementById("scanResults");
+  results.innerHTML = "";
+
+  const connected = await isGmailConnected();
+  if(!connected){
+    status.innerHTML = "Halo needs permission to read your Gmail — you'll approve this on Google's own sign-in screen.";
+    results.innerHTML = `<button class="bigbtn grad" onclick="connectGmail()">Connect Gmail</button>`;
+    return;
+  }
+
+  status.textContent = "👼 Halo is searching your inbox…";
+  try{
+    const token = await getAccessToken();
+    const res = await fetch("/api/gmail/scan", { method:"POST", headers:{ Authorization: "Bearer "+token } });
+    const data = await res.json();
+    if(data.error === "not_connected"){
+      status.innerHTML = "Connection expired — reconnect Gmail.";
+      results.innerHTML = `<button class="bigbtn grad" onclick="connectGmail()">Connect Gmail</button>`;
+      return;
+    }
+    if(!res.ok) throw new Error(JSON.stringify(data.error));
+    const items = data.items || [];
+    if(!items.length){ status.textContent = "No new receipts, returns, or credits found in the last 60 days."; return; }
+    status.textContent = `Found ${items.length} item${items.length>1?'s':''} — review before adding:`;
+    window._scanFound = items;
+    results.innerHTML = items.map((it,idx)=>`
+      <label class="scanrow">
+        <input type="checkbox" checked data-idx="${idx}">
+        <div class="body"><div class="t">${it.store||'Store'} — ${it.kind==='return'?(it.itemName||'Return window'):(it.kind==='gift'?'Gift card':'Store credit')}</div>
+        <div class="s">${it.kind==='return' ? 'Return by '+(it.deadline||'—') : fmt$(it.amount||0)}</div></div>
+      </label>`).join("");
+    document.getElementById("scanImportBtn").style.display="block";
+  }catch(e){
+    console.error(e);
+    status.textContent = "Couldn't reach Gmail right now — try again, or paste an email manually instead.";
+  }
+}
+
+async function connectGmail(){
+  const cfg = await (await fetch("/api/config")).json();
+  const token = await getAccessToken();
+  if(!cfg.googleClientId){ toast("Google isn't configured on this deployment yet"); return; }
+  const params = new URLSearchParams({
+    client_id: cfg.googleClientId,
+    redirect_uri: cfg.redirectUri,
+    response_type: "code",
+    scope: "https://www.googleapis.com/auth/gmail.readonly",
+    access_type: "offline",
+    prompt: "consent",
+    state: token
+  });
+  window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
+}
+
+async function importScanned(){
+  const checks = document.querySelectorAll('#scanResults input[type=checkbox]:checked');
+  const toAdd = [...checks].map(c=>window._scanFound[parseInt(c.dataset.idx)]);
+  for(const it of toAdd){
+    if(it.kind==='return'){
+      await dbInsertItem({kind:'return', store:it.store||'Store', item_name:it.itemName||'Item', amount:it.amount||0, deadline:it.deadline||daysFromNow(30)});
+    } else {
+      const amt = it.amount||0;
+      await dbInsertItem({kind:it.kind, store:it.store||'Store', amount:amt, remaining:amt, code:it.code||null});
+    }
+  }
+  toast(`${toAdd.length} item(s) added ✓`);
+  await loadAll(); render(); go("log");
+}
+
+/* ============ warranty quick-add ============ */
+async function saveWarranty(){
+  const itemName = document.getElementById("w_item").value.trim();
+  const store = document.getElementById("w_store").value.trim() || "Store";
+  const purchaseDate = document.getElementById("w_date").value || new Date().toISOString().slice(0,10);
+  const len = parseInt(document.getElementById("w_len").value);
+  const value = parseFloat(document.getElementById("w_value").value) || 0;
+  if(!itemName){ toast("Add an item name first"); return; }
+  const deadline = new Date(new Date(purchaseDate).getTime() + len*86400000).toISOString().slice(0,10);
+  const ok = await dbInsertItem({kind:"warranty", store, item_name:itemName, amount:value, deadline});
+  if(!ok) return;
+  await loadAll(); render(); toast(itemName+" logged — covered until "+deadline); go("log");
+}
+
+/* ============ email parsing (credit / gift / return) ============ */
+const DEMO_EMAIL = `Your Zara Return Has Been Processed
+Hi Kaya, we've received your return. Since this was a final-sale promotional item, $22.50 has been issued as store credit to your Zara account, redeemable on your next online or in-store purchase. No expiration date.`;
+function loadDemoEmail(){ document.getElementById("emailPaste").value = DEMO_EMAIL; }
+
+async function aiParseEmail(text){
+  const res = await fetch("/api/parse",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode:"email", text})});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error||"parse failed");
+  return JSON.parse(data.raw.replace(/```json|```/g,"").trim());
+}
+
+async function lookupPolicy(store){
+  const res = await fetch("/api/parse",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode:"policy", store})});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error||"lookup failed");
+  const match = data.raw.match(/\{[\s\S]*\}/);
+  return match ? JSON.parse(match[0]) : null;
+}
+
+function localParseEmail(text){
+  const amtM = text.match(/\$([\d,]+\.?\d{0,2})/);
+  const amount = amtM ? parseFloat(amtM[1].replace(",","")) : 0;
+  let store = "Store";
+  for(const s of Object.keys(RETURN_WINDOWS)){ if(text.toLowerCase().includes(s)){ store = s[0].toUpperCase()+s.slice(1); break; } }
+  const isGift = /gift card/i.test(text);
+  const isCredit = /credit/i.test(text) && !/order confirmation|shipped|placed/i.test(text);
+  const kind = isCredit ? (isGift?"gift":"credit") : "return";
+  return { found:true, kind, store, amount, itemName: kind==="return" ? "Your order" : "", deadline:"", code:"" };
+}
+
+async function parseEmail(){
+  const text = document.getElementById("emailPaste").value.trim();
+  const status = document.getElementById("emailStatus");
+  if(!text){ toast("Paste an email first ✏️"); return; }
+  status.textContent = "👼 Halo is reading…";
+  let parsed, via="AI";
+  try{ parsed = await aiParseEmail(text); if(parsed.found===undefined) throw 0; }
+  catch(e){ parsed = localParseEmail(text); via="built-in parser"; }
+  if(!parsed.found){
+    status.textContent = "Couldn't classify that email — add it manually below.";
+    showReview("emailReview", {kind:"credit", store:"", amount:"", itemName:"", deadline:""});
+    return;
+  }
+  status.textContent = "Read via "+via+" ✓";
+  if(parsed.kind==="return" && !parsed.deadline){
+    const win = RETURN_WINDOWS[(parsed.store||"").toLowerCase()] ?? 30;
+    parsed.deadline = new Date(Date.now()+win*86400000).toISOString().slice(0,10);
+  }
+  showReview("emailReview", parsed);
+}
+
+function showReview(targetId, d){
+  const r = document.getElementById(targetId);
+  r.style.display = "block";
+  const rid = "rev_"+targetId;
+  const isMoney = d.kind==="credit"||d.kind==="gift";
+  r.innerHTML = `<h4>Confirm the details</h4>
+    <div class="field"><label>Type</label><select id="${rid}_kind" onchange="toggleReviewFields('${rid}')">
+      <option value="credit" ${d.kind==='credit'?'selected':''}>Store credit</option>
+      <option value="gift" ${d.kind==='gift'?'selected':''}>Gift card</option>
+      <option value="return" ${d.kind==='return'?'selected':''}>Return window</option>
+    </select></div>
+    <div class="field"><label>Store</label><input id="${rid}_store" value="${d.store||''}" placeholder="e.g. Aritzia"></div>
+    <div class="field" id="${rid}_itemWrap" style="display:${d.kind==='return'?'block':'none'}"><label>Item</label><input id="${rid}_item" value="${d.itemName||''}" placeholder="What you bought"></div>
+    <div class="field" id="${rid}_amtWrap" style="display:${isMoney?'block':'none'}"><label>Amount</label><input id="${rid}_amount" type="number" step="0.01" value="${d.amount||''}" placeholder="0.00"></div>
+    <div class="field" id="${rid}_dlWrap" style="display:${d.kind==='return'?'block':'none'}"><label>Return by</label><input id="${rid}_deadline" type="date" value="${d.deadline||''}"></div>
+    <div class="field"><label>Card / credit code (optional)</label><input id="${rid}_code" value="${d.code||''}" placeholder="Leave blank if none"></div>
+    <button class="bigbtn" onclick="saveFromReview('${rid}')">Add to Log</button>`;
+}
+function toggleReviewFields(rid){
+  const kind = document.getElementById(rid+"_kind").value;
+  document.getElementById(rid+"_itemWrap").style.display = kind==="return" ? "block":"none";
+  document.getElementById(rid+"_amtWrap").style.display = kind==="return" ? "none":"block";
+  document.getElementById(rid+"_dlWrap").style.display = kind==="return" ? "block":"none";
+}
+async function saveFromReview(rid){
+  const kind = document.getElementById(rid+"_kind").value;
+  const store = document.getElementById(rid+"_store").value.trim() || "Store";
+  const code = document.getElementById(rid+"_code").value.trim();
+  const pinEl = document.getElementById(rid+"_pin");
+  const pin = pinEl ? pinEl.value.trim() : "";
+  let ok;
+  if(kind==="return"){
+    const itemName = document.getElementById(rid+"_item").value.trim() || "Item";
+    const deadline = document.getElementById(rid+"_deadline").value || daysFromNow(30);
+    ok = await dbInsertItem({kind:"return", store, item_name:itemName, amount:0, deadline});
+  } else {
+    const amount = parseFloat(document.getElementById(rid+"_amount").value) || 0;
+    if(amount<=0){ toast("Add an amount first"); return; }
+    ok = await dbInsertItem({kind, store, amount, remaining:amount, code:code||null, pin:pin||null});
+  }
+  if(!ok) return;
+  await loadAll(); render(); toast(store+" added to your log ✓"); go("log");
+}
+
+/* ============ gift card photo ============ */
+function onFile(e){
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    window._photoData = { base64: reader.result.split(",")[1], mediaType: file.type };
+    document.getElementById("fileLabel").innerHTML = `<img src="${reader.result}">`;
+    document.getElementById("readCardBtn").disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+async function aiParseGiftCardImage(base64, mediaType){
+  const res = await fetch("/api/parse",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode:"photo", image:base64, mediaType})});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error||"parse failed");
+  return JSON.parse(data.raw.replace(/```json|```/g,"").trim());
+}
+async function parsePhoto(){
+  const status = document.getElementById("photoStatus");
+  if(!window._photoData){ toast("Add a photo first 📷"); return; }
+  status.textContent = "👼 Halo is reading the card…";
+  let parsed, ok=true;
+  try{ parsed = await aiParseGiftCardImage(window._photoData.base64, window._photoData.mediaType); }
+  catch(e){ ok=false; }
+  if(!ok || !parsed){
+    status.textContent = "Couldn't auto-read this one — fill in manually.";
+    showReview("photoReview", {kind:"gift", store:"", amount:"", code:""});
+    return;
+  }
+  status.textContent = "Card read ✓ — double-check before saving";
+  showReview("photoReview", {kind:"gift", store:parsed.store, amount:parsed.amount||"", code:parsed.code||""});
+  if(parsed.pin){
+    setTimeout(()=>{
+      const rid="rev_photoReview";
+      const pinField = document.createElement("div");
+      pinField.className = "field";
+      pinField.innerHTML = `<label>PIN</label><input id="${rid}_pin" value="${parsed.pin}">`;
+      document.getElementById(rid+"_code").closest(".field").after(pinField);
+    },0);
+  }
+}
+
+/* ============ detail sheet ============ */
+function openDetail(id){
+  const i = state.items.find(x=>x.id===id);
+  if(!i) return;
+  const sheet = document.getElementById("sheet");
+  const isMoney = i.kind==="credit"||i.kind==="gift";
+  if(isMoney){
+    const tagText = i.kind==="credit" ? "Store credit" : "Gift card";
+    sheet.innerHTML = `<div class="sheet-top"><div><div class="store">${i.store}</div><div class="meta">${tagText} · added ${i.added}</div></div>
+      <button class="closebtn" onclick="closeDetail()">✕</button></div>
+      ${i.code ? `<div class="cardnum"><div class="lbl">Card number</div><div class="num">${i.code}</div>
+        <div class="row2"><button class="copybtn" onclick="copyText('${i.code.replace(/'/g,"")}')">Copy number</button>${i.pin?`<span class="pin">PIN ${i.pin}</span>`:""}</div>
+        ${i.pin?`<div class="row2"><button class="copybtn" onclick="copyText('${i.pin}')">Copy PIN</button><span></span></div>`:""}</div>` : ""}
+      <div class="balrow"><div><div class="big">${fmt$(i.remaining)}</div><div class="lbl">remaining of ${fmt$(i.amount)} original</div></div></div>
+      ${i.remaining>0.004 ? `<div class="uselog"><input type="number" step="0.01" id="useAmt" placeholder="Amount just used"><button onclick="logUsage('${i.id}')">Log</button></div>` : `<div class="status" style="margin-top:12px;">Fully redeemed 🎉</div>`}
+      ${i.history && i.history.length ? `<div class="history">${i.history.map(h=>`<div class="h-row"><span>Used on ${h.d}</span><span>-${fmt$(h.amt)}</span></div>`).join("")}</div>` : ""}
+      <button class="removebtn" onclick="deleteItem('${i.id}')">Remove from log</button>`;
+  } else {
+    const dl = daysLeft(i.deadline);
+    const tagText = i.kind==="return" ? "Return window" : "Warranty";
+    const expired = dl<0;
+    const bgc = expired ? "#EFEDE7" : dl<=3 ? "var(--red-bg)" : dl<=14 ? "var(--amber-bg)" : "var(--sage-bg)";
+    const fgc = expired ? "var(--muted)" : dl<=3 ? "var(--red)" : dl<=14 ? "var(--amber)" : "var(--sage)";
+    sheet.innerHTML = `<div class="sheet-top"><div><div class="store">${i.itemName}</div><div class="meta">${i.store} · ${tagText}${i.value?' · '+fmt$(i.value):''}</div></div>
+      <button class="closebtn" onclick="closeDetail()">✕</button></div>
+      <div class="clockbig" style="background:${bgc};color:${fgc}">
+        <div class="num">${expired?'Expired':dl===0?'Today':dl+' day'+(dl===1?'':'s')}</div>
+        <div class="lbl">${expired?'window closed '+i.deadline:'until '+i.deadline}</div>
+      </div>
+      <div id="policyBox"></div>
+      <button class="bigbtn ghost" onclick="runPolicyLookup('${i.store.replace(/'/g,"")}')">🔍 Check current policy & card benefits</button>
+      ${i.status==="active" && !expired ? `<button class="donebtn" onclick="markHandled('${i.id}')">${i.kind==='return'?'Mark as returned':'Mark as used/claimed'}</button>` : ""}
+      <button class="removebtn" onclick="deleteItem('${i.id}')">Remove from log</button>`;
+  }
+  document.getElementById("overlay").classList.add("show");
+}
+
+async function runPolicyLookup(store){
+  const box = document.getElementById("policyBox");
+  box.innerHTML = `<div class="status">👼 Halo is looking up ${store}'s policy…</div>`;
+  try{
+    const info = await lookupPolicy(store);
+    if(!info){ box.innerHTML = `<div class="status">Couldn't find current policy info.</div>`; return; }
+    box.innerHTML = `<div class="review" style="display:block;">
+      <h4>${store} — ${info.returnWindowDays ?? '?'}-day return window</h4>
+      <p style="font-size:12.5px;color:#57565F;margin-top:6px;line-height:1.5;">${info.policyNote||''}</p>
+      ${info.cardBenefitNote ? `<p style="font-size:12.5px;color:var(--amber);margin-top:8px;line-height:1.5;">💳 ${info.cardBenefitNote}</p>` : ''}
+    </div>`;
+  }catch(e){
+    box.innerHTML = `<div class="status">Lookup failed — try again in a moment.</div>`;
+  }
+}
+function closeDetail(){ document.getElementById("overlay").classList.remove("show"); }
+
+async function logUsage(id){
+  const i = state.items.find(x=>x.id===id);
+  const amt = parseFloat(document.getElementById("useAmt").value);
+  if(!amt || amt<=0){ toast("Enter an amount first"); return; }
+  const applied = Math.min(amt, i.remaining);
+  await dbLogUsage(id, applied);
+  await dbUpdateItem(id, { remaining: Math.max(0, i.remaining - applied) });
+  await loadAll(); render(); toast(fmt$(applied)+" logged ✓"); openDetail(id);
+}
+async function markHandled(id){
+  await dbUpdateItem(id, { status: "handled" });
+  await loadAll(); render(); closeDetail(); toast("Marked handled ✓");
+}
+async function deleteItem(id){
+  await dbDeleteItem(id);
+  await loadAll(); render(); closeDetail(); toast("Removed from log");
+}
+function copyText(t){
+  navigator.clipboard?.writeText(t).then(()=>toast("Copied ✓")).catch(()=>toast("Copy failed — long-press to select"));
+}
+
+/* ============ boot ============ */
+(async ()=>{
+  const ok = await initSupabase();
+  if(ok) await loadAll();
+  render();
+  if(new URLSearchParams(location.search).get('gmail')==='connected'){
+    toast("Gmail connected ✓");
+    history.replaceState({}, '', location.pathname);
+    go('add'); startScan();
+  }
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  }
+})();
+</script>
+</body>
+</html>
