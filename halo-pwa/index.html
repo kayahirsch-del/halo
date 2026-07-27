@@ -715,6 +715,11 @@ async function runPlaidSync(){
       results.innerHTML = `<button class="bigbtn grad" onclick="connectPlaid()">Connect your card</button>`;
       return;
     }
+    if(data.error === "not_ready"){
+      status.innerHTML = "Your bank is still sending over your purchase history — this can take a few minutes right after connecting.";
+      results.innerHTML = `<button class="bigbtn grad" onclick="runPlaidSync()">Try again</button>`;
+      return;
+    }
     if(!res.ok) throw new Error(data.error||"sync failed");
     const items = (data.items||[]).map(it=>({...it, kind:'return'}));
     if(!items.length){ status.textContent = "No new returnable purchases found."; return; }
@@ -729,7 +734,7 @@ async function runPlaidSync(){
     document.getElementById("scanImportBtn").style.display="block";
   }catch(e){
     console.error(e);
-    status.textContent = "Couldn't reach Plaid right now — try again later.";
+    status.textContent = e.message || "Couldn't reach Plaid right now — try again later.";
   }
 }
 

@@ -56,6 +56,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ items: candidates });
   } catch (e) {
+    // Plaid hasn't finished its initial pull for this Item yet — happens for
+    // a stretch (seconds to a few minutes, sometimes longer) right after
+    // linking a new card. Not a real failure, just "ask again shortly."
+    if (e.plaid?.error_code === 'PRODUCT_NOT_READY') {
+      return res.status(400).json({ error: 'not_ready' });
+    }
     return res.status(500).json({ error: e.message, detail: e.plaid });
   }
 }
