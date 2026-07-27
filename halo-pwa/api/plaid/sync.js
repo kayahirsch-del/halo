@@ -22,13 +22,18 @@ export default async function handler(req, res) {
   if (itemErr || !item) return res.status(400).json({ error: 'not_connected' });
 
   try {
+    // Plaid wants the `cursor` field left out entirely for the first sync —
+    // sending it as null/empty string gets rejected with "cursor must be a
+    // properly formatted string", so only include it when it's a real value.
     let cursor = item.cursor || undefined;
     let added = [];
     let hasMore = true;
     while (hasMore) {
-      const page = await plaidFetch('/transactions/sync', { access_token: item.access_token, cursor });
+      const body = { access_token: item.access_token };
+      if (cursor) body.cursor = cursor;
+      const page = await plaidFetch('/transactions/sync', body);
       added = added.concat(page.added || []);
-      cursor = page.next_cursor;
+      cursor = page.next_cursor || undefined;
       hasMore = page.has_more;
     }
 
