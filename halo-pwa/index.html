@@ -679,7 +679,8 @@ async function connectPlaid(){
     if(!res.ok) throw new Error(data.error||"couldn't start Plaid");
     linkToken = data.link_token;
   }catch(e){
-    toast("Plaid isn't configured on this deployment yet");
+    console.error(e);
+    toast(e.message || "Couldn't start Plaid — try again");
     return;
   }
   if(window.posthog) posthog.capture('plaid_connect_clicked');
