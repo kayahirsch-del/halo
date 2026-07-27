@@ -117,11 +117,6 @@
 
   .empty{text-align:center;color:var(--muted);font-size:13px;padding:28px 20px;line-height:1.6;}
 
-  .fab{position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(190px);
-    width:56px;height:56px;border-radius:50%;background:var(--ink);color:#fff;border:none;font-size:26px;
-    box-shadow:0 10px 26px rgba(20,15,5,.3);cursor:pointer;z-index:60;display:flex;align-items:center;justify-content:center;}
-  @media(max-width:430px){.fab{transform:translateX(calc(50vw - 78px));}}
-
   .method{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px;box-shadow:0 6px 20px rgba(30,25,10,.06);
     cursor:pointer;display:flex;gap:14px;align-items:center;border:1.5px solid transparent;}
   .method:active{border-color:var(--gold);}
@@ -320,8 +315,6 @@
 
   <div id="toast"></div>
   <div id="overlay" onclick="if(event.target===this)closeDetail()"><div class="sheet" id="sheet"></div></div>
-  <div class="fab" id="fab" style="display:none;" onclick="go('add')">+</div>
-
   <div class="tabbar" id="tabbar" style="display:none;">
     <button class="tab on" data-s="log" onclick="go('log')"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9.5 14h5" stroke-linecap="round"/></svg><span>Log</span></button>
     <button class="tab" data-s="add" onclick="go('add')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg><span>Add</span></button>
@@ -402,7 +395,6 @@ async function submitAuth(){
 
 async function enterApp(){
   document.getElementById("s-authgate").classList.remove("active");
-  document.getElementById("fab").style.display = "";
   document.getElementById("tabbar").style.display = "";
   go("log");
   await loadAll();
@@ -414,7 +406,6 @@ async function signOut(){
   if(window.posthog) posthog.reset();
   currentUserId = null;
   state.items = [];
-  document.getElementById("fab").style.display = "none";
   document.getElementById("tabbar").style.display = "none";
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById("s-authgate").classList.add("active");
@@ -975,7 +966,6 @@ function copyText(t){
 (async ()=>{
   const hasSession = await initSupabase();
   if(hasSession){
-    document.getElementById("fab").style.display = "";
     document.getElementById("tabbar").style.display = "";
     go("log");
     await loadAll();
