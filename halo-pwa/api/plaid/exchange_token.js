@@ -24,6 +24,7 @@ export default async function handler(req, res) {
       user_id: user.id,
       access_token: exch.access_token,
       item_id: exch.item_id,
+      cursor: null, // new Item (e.g. switching from Sandbox to Production) — old cursor is invalid for it
       updated_at: new Date().toISOString()
     });
     if (upsertErr) return res.status(500).json({ error: upsertErr.message });
