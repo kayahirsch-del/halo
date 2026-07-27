@@ -368,7 +368,7 @@ async function submitAuth(){
   btn.textContent = "One sec…";
   try{
     if(authMode === "signup"){
-      const { data, error } = await sb.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
       if(error) throw error;
       if(data.session){
         currentUserId = data.session.user.id;
