@@ -62,8 +62,20 @@ create table public.google_tokens (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create table public.plaid_items (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  access_token text not null,
+  item_id text not null,
+  cursor text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 ```
-All three tables have RLS enabled, scoped to `auth.uid() = user_id` (or via the parent
+`items` also has a nullable `plaid_transaction_id text` column (unique where not null) so
+purchases synced from Plaid aren't imported twice.
+
+All tables have RLS enabled, scoped to `auth.uid() = user_id` (or via the parent
 `items` row for `item_usage`). Auth is currently anonymous sign-in
 (`supabase.auth.signInAnonymously()`) — every device gets its own persistent anonymous
 user unless we add real login later. **Anonymous sign-ins must be enabled in the Supabase
@@ -89,8 +101,25 @@ Base URL: `https://halo-pwa-1.vercel.app` (or whatever custom domain it ends up 
 - **`GET /api/auth/google-callback`** — OAuth callback. **This is web-redirect based and
   needs adapting for native** — see "Known gap" below.
 
+- **`POST /api/plaid/create_link_token`** — header `Authorization: Bearer <supabase access token>`.
+  Creates a Plaid Link token scoped to that user (`client_user_id`). Returns `{ link_token }`.
+
+- **`POST /api/plaid/exchange_token`** — header `Authorization: Bearer <supabase access token>`,
+  body `{ public_token }` from a completed Plaid Link flow. Exchanges it for an access token
+  and stores it in `public.plaid_items`, scoped to that user via RLS.
+
+- **`POST /api/plaid/sync`** — header `Authorization: Bearer <supabase access token>`. Calls
+  Plaid's `/transactions/sync` with the user's stored cursor, advances and persists that
+  cursor, then filters newly-added transactions down to retail-ish purchases
+  (`personal_finance_category.primary` in `GENERAL_MERCHANDISE` / `HOME_IMPROVEMENT` /
+  `PERSONAL_CARE`, posted, money-out only) and returns them as candidate return-window items
+  (`{ items: [{ plaid_transaction_id, store, itemName, amount, deadline }] }`) for the client
+  to review and import via the existing scan-review UI.
+
 Server-side env vars already required on Vercel (already set or in progress):
-`ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+`ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV` (`sandbox` / `development` / `production`,
+defaults to `sandbox` if unset).
 
 ---
 

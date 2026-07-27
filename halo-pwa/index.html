@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#1B1B20">
 <meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 
 <!--
   PostHog analytics (shared project with kayahirsch.com, US Cloud).
@@ -254,6 +255,10 @@
       <div class="method" onclick="startScan()">
         <div class="ic" style="background:#DCEEFB">🔍</div>
         <div><h4>Scan my inbox</h4><p>Halo searches Gmail directly for receipts, returns & credits</p></div>
+      </div>
+      <div class="method" onclick="startCardSync()">
+        <div class="ic" style="background:#FBEFD7">💳</div>
+        <div><h4>Track my card</h4><p>Halo watches new card purchases automatically via Plaid</p></div>
       </div>
       <div class="method" onclick="showMethod('email')">
         <div class="ic" style="background:var(--sage-bg)">📧</div>
@@ -630,7 +635,7 @@ async function importScanned(){
   const toAdd = [...checks].map(c=>window._scanFound[parseInt(c.dataset.idx)]);
   for(const it of toAdd){
     if(it.kind==='return'){
-      await dbInsertItem({kind:'return', store:it.store||'Store', item_name:it.itemName||'Item', amount:it.amount||0, deadline:it.deadline||daysFromNow(30)});
+      await dbInsertItem({kind:'return', store:it.store||'Store', item_name:it.itemName||'Item', amount:it.amount||0, deadline:it.deadline||daysFromNow(30), plaid_transaction_id:it.plaid_transaction_id||null});
     } else {
       const amt = it.amount||0;
       await dbInsertItem({kind:it.kind, store:it.store||'Store', amount:amt, remaining:amt, code:it.code||null});
@@ -638,6 +643,93 @@ async function importScanned(){
   }
   toast(`${toAdd.length} item(s) added ✓`);
   await loadAll(); render(); go("log");
+}
+
+/* ============ card tracking (real purchases via Plaid) ============ */
+async function isPlaidConnected(){
+  const { data, error } = await sb.from('plaid_items').select('user_id').maybeSingle();
+  return !error && !!data;
+}
+
+async function startCardSync(){
+  document.getElementById("pickMethod").style.display="none";
+  document.getElementById("scanFlow").style.display="block";
+  document.getElementById("scanImportBtn").style.display="none";
+  const status = document.getElementById("scanStatus");
+  const results = document.getElementById("scanResults");
+  results.innerHTML = "";
+
+  const connected = await isPlaidConnected();
+  if(!connected){
+    status.innerHTML = "Halo needs to connect to your card via Plaid — you'll pick your bank on Plaid's secure screen.";
+    results.innerHTML = `<button class="bigbtn grad" onclick="connectPlaid()">Connect your card</button>`;
+    return;
+  }
+  status.textContent = "👼 Halo is checking your recent purchases…";
+  await runPlaidSync();
+}
+
+async function connectPlaid(){
+  const token = await getAccessToken();
+  const status = document.getElementById("scanStatus");
+  let linkToken;
+  try{
+    const res = await fetch("/api/plaid/create_link_token", { method:"POST", headers:{ Authorization:"Bearer "+token } });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||"couldn't start Plaid");
+    linkToken = data.link_token;
+  }catch(e){
+    toast("Plaid isn't configured on this deployment yet");
+    return;
+  }
+  if(window.posthog) posthog.capture('plaid_connect_clicked');
+  const handler = Plaid.create({
+    token: linkToken,
+    onSuccess: async (public_token) => {
+      status.textContent = "👼 Linking your card…";
+      const t = await getAccessToken();
+      const res = await fetch("/api/plaid/exchange_token", {
+        method:"POST", headers:{ "Content-Type":"application/json", Authorization:"Bearer "+t },
+        body: JSON.stringify({ public_token })
+      });
+      if(!res.ok){ status.textContent = "Couldn't finish connecting your card — try again."; return; }
+      toast("Card connected ✓");
+      status.textContent = "👼 Halo is checking your recent purchases…";
+      await runPlaidSync();
+    },
+    onExit: (err) => { if(err) status.textContent = "Connection cancelled."; }
+  });
+  handler.open();
+}
+
+async function runPlaidSync(){
+  const status = document.getElementById("scanStatus");
+  const results = document.getElementById("scanResults");
+  try{
+    const token = await getAccessToken();
+    const res = await fetch("/api/plaid/sync", { method:"POST", headers:{ Authorization:"Bearer "+token } });
+    const data = await res.json();
+    if(data.error === "not_connected"){
+      status.innerHTML = "Connection expired — reconnect your card.";
+      results.innerHTML = `<button class="bigbtn grad" onclick="connectPlaid()">Connect your card</button>`;
+      return;
+    }
+    if(!res.ok) throw new Error(data.error||"sync failed");
+    const items = (data.items||[]).map(it=>({...it, kind:'return'}));
+    if(!items.length){ status.textContent = "No new returnable purchases found."; return; }
+    status.textContent = `Found ${items.length} purchase${items.length>1?'s':''} — review before adding:`;
+    window._scanFound = items;
+    results.innerHTML = items.map((it,idx)=>`
+      <label class="scanrow">
+        <input type="checkbox" checked data-idx="${idx}">
+        <div class="body"><div class="t">${it.store||'Store'} — ${it.itemName||'Return window'}</div>
+        <div class="s">Return by ${it.deadline||'—'} · ${fmt$(it.amount||0)}</div></div>
+      </label>`).join("");
+    document.getElementById("scanImportBtn").style.display="block";
+  }catch(e){
+    console.error(e);
+    status.textContent = "Couldn't reach Plaid right now — try again later.";
+  }
 }
 
 /* ============ warranty quick-add ============ */
