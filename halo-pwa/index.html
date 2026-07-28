@@ -255,17 +255,9 @@
         <div class="ic" style="background:#FBEFD7">💳</div>
         <div><h4>Track my card</h4><p>Halo watches new card purchases automatically via Plaid</p></div>
       </div>
-      <div class="method" onclick="showMethod('email')">
-        <div class="ic" style="background:var(--sage-bg)">📧</div>
-        <div><h4>Paste one email</h4><p>For a specific receipt or return notice</p></div>
-      </div>
       <div class="method" onclick="showMethod('photo')">
         <div class="ic" style="background:#EFEAFB">📷</div>
         <div><h4>Add a gift card photo</h4><p>Halo reads the number, PIN & balance off the card</p></div>
-      </div>
-      <div class="method" onclick="showMethod('warranty')">
-        <div class="ic" style="background:#E7EEF7">🛡️</div>
-        <div><h4>Log a warranty</h4><p>Item, purchase date, and coverage length</p></div>
       </div>
     </div>
 
@@ -276,15 +268,6 @@
       <button class="bigbtn ghost" onclick="go('add')">Cancel</button>
     </div>
 
-    <div id="emailFlow" style="display:none;">
-      <p class="status" style="text-align:left;margin:2px 2px 8px;">Paste the email below — a return confirmation, order receipt, or credit notice.</p>
-      <textarea class="pastebox" id="emailPaste" placeholder="Paste email text here…"></textarea>
-      <button class="bigbtn grad" onclick="parseEmail()">✨ Read it</button>
-      <button class="bigbtn ghost" onclick="loadDemoEmail()">Try a demo email</button>
-      <div class="status" id="emailStatus"></div>
-      <div class="review" id="emailReview"></div>
-    </div>
-
     <div id="photoFlow" style="display:none;">
       <label class="filebox" id="fileLabel">
         📷 Tap to take a photo or choose from your library
@@ -293,23 +276,6 @@
       <button class="bigbtn grad" id="readCardBtn" onclick="parsePhoto()" disabled>✨ Read card</button>
       <div class="status" id="photoStatus"></div>
       <div class="review" id="photoReview"></div>
-    </div>
-
-    <div id="warrantyFlow" style="display:none;">
-      <div class="field"><label>Item</label><input id="w_item" placeholder="e.g. AirPods Pro"></div>
-      <div class="field"><label>Store / brand</label><input id="w_store" placeholder="e.g. Apple"></div>
-      <div class="field"><label>Purchase date</label><input id="w_date" type="date"></div>
-      <div class="field"><label>Coverage length</label>
-        <select id="w_len">
-          <option value="90">90 days</option>
-          <option value="180">6 months</option>
-          <option value="365" selected>1 year</option>
-          <option value="730">2 years</option>
-          <option value="1095">3 years</option>
-        </select>
-      </div>
-      <div class="field"><label>Item value (optional)</label><input id="w_value" type="number" step="0.01" placeholder="0.00"></div>
-      <button class="bigbtn grad" onclick="saveWarranty()">Add to Log</button>
     </div>
   </div>
 
@@ -453,9 +419,6 @@ const fmt$ = n => "$" + (Math.round((n||0)*100)/100).toLocaleString();
 function daysFromNow(n){ return new Date(Date.now()+n*86400000).toISOString().slice(0,10); }
 function daysLeft(dateStr){ return Math.ceil((new Date(dateStr).getTime()-Date.now())/86400000); }
 
-const RETURN_WINDOWS = {aritzia:30,zara:30,target:90,amazon:30,sephora:30,nordstrom:365,uniqlo:30,
-  nike:60,lululemon:30,"best buy":15,apple:14,everlane:30,madewell:30,ssense:14,revolve:30};
-
 const COLORS = {aritzia:"#C9A876",zara:"#1B1B20",sephora:"#000000",nordstrom:"#1B1B20",target:"#CC0000",
   uniqlo:"#E4002B",lululemon:"#8B0000",apple:"#555",default:"#8B7FC7"};
 function colorFor(store){ return COLORS[(store||"").toLowerCase()] || COLORS.default; }
@@ -486,7 +449,7 @@ function render(){
 
   document.getElementById("clockCount").textContent = clock.length+" active";
   document.getElementById("clockList").innerHTML = clock.length ? clock.map(renderClockRow).join("") :
-    `<div class="empty">Nothing on the clock. Scan your inbox or log a warranty to start tracking.</div>`;
+    `<div class="empty">Nothing on the clock. Scan your inbox to start tracking returns and warranties.</div>`;
 
   document.getElementById("moneyCount").textContent = money.length+" active";
   document.getElementById("moneyList").innerHTML = money.length ? money.map(renderMoneyRow).join("") :
@@ -539,16 +502,11 @@ function go(name){
 }
 function resetAddFlow(){
   document.getElementById("pickMethod").style.display="block";
-  ["emailFlow","photoFlow","warrantyFlow","scanFlow"].forEach(f=>document.getElementById(f).style.display="none");
-  document.getElementById("emailReview").style.display="none";
+  ["photoFlow","scanFlow"].forEach(f=>document.getElementById(f).style.display="none");
   document.getElementById("photoReview").style.display="none";
-  document.getElementById("emailStatus").textContent="";
   document.getElementById("photoStatus").textContent="";
-  document.getElementById("emailPaste").value="";
   document.getElementById("fileLabel").innerHTML = '📷 Tap to take a photo or choose from your library<input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none;" onchange="onFile(event)">';
   document.getElementById("readCardBtn").disabled = true;
-  document.getElementById("w_item").value=""; document.getElementById("w_store").value="";
-  document.getElementById("w_date").value=new Date().toISOString().slice(0,10); document.getElementById("w_value").value="";
   document.getElementById("scanImportBtn").style.display="none";
   document.getElementById("scanResults").innerHTML="";
   window._photoData = null; window._scanFound = null;
@@ -594,13 +552,13 @@ async function startScan(){
     results.innerHTML = items.map((it,idx)=>`
       <label class="scanrow">
         <input type="checkbox" checked data-idx="${idx}">
-        <div class="body"><div class="t">${it.store||'Store'} — ${it.kind==='return'?(it.itemName||'Return window'):(it.kind==='gift'?'Gift card':'Store credit')}</div>
-        <div class="s">${it.kind==='return' ? 'Return by '+(it.deadline||'—') : fmt$(it.amount||0)}</div></div>
+        <div class="body"><div class="t">${it.store||'Store'} — ${it.kind==='return'?(it.itemName||'Return window'):it.kind==='warranty'?(it.itemName||'Warranty'):(it.kind==='gift'?'Gift card':'Store credit')}</div>
+        <div class="s">${it.kind==='return' ? 'Return by '+(it.deadline||'—') : it.kind==='warranty' ? 'Covered until '+(it.deadline||'—') : fmt$(it.amount||0)}</div></div>
       </label>`).join("");
     document.getElementById("scanImportBtn").style.display="block";
   }catch(e){
     console.error(e);
-    status.textContent = "Couldn't reach Gmail right now — try again, or paste an email manually instead.";
+    status.textContent = "Couldn't reach Gmail right now — try again in a bit.";
   }
 }
 
@@ -625,8 +583,8 @@ async function importScanned(){
   const checks = document.querySelectorAll('#scanResults input[type=checkbox]:checked');
   const toAdd = [...checks].map(c=>window._scanFound[parseInt(c.dataset.idx)]);
   for(const it of toAdd){
-    if(it.kind==='return'){
-      await dbInsertItem({kind:'return', store:it.store||'Store', item_name:it.itemName||'Item', amount:it.amount||0, deadline:it.deadline||daysFromNow(30), plaid_transaction_id:it.plaid_transaction_id||null});
+    if(it.kind==='return' || it.kind==='warranty'){
+      await dbInsertItem({kind:it.kind, store:it.store||'Store', item_name:it.itemName||'Item', amount:it.amount||0, deadline:it.deadline||daysFromNow(30), plaid_transaction_id:it.plaid_transaction_id||null});
     } else {
       const amt = it.amount||0;
       await dbInsertItem({kind:it.kind, store:it.store||'Store', amount:amt, remaining:amt, code:it.code||null});
@@ -729,34 +687,6 @@ async function runPlaidSync(){
   }
 }
 
-/* ============ warranty quick-add ============ */
-async function saveWarranty(){
-  const itemName = document.getElementById("w_item").value.trim();
-  const store = document.getElementById("w_store").value.trim() || "Store";
-  const purchaseDate = document.getElementById("w_date").value || new Date().toISOString().slice(0,10);
-  const len = parseInt(document.getElementById("w_len").value);
-  const value = parseFloat(document.getElementById("w_value").value) || 0;
-  if(!itemName){ toast("Add an item name first"); return; }
-  const deadline = new Date(new Date(purchaseDate).getTime() + len*86400000).toISOString().slice(0,10);
-  const ok = await dbInsertItem({kind:"warranty", store, item_name:itemName, amount:value, deadline});
-  if(!ok) return;
-  await loadAll(); render(); toast(itemName+" logged — covered until "+deadline); go("log");
-}
-
-/* ============ email parsing (credit / gift / return) ============ */
-const DEMO_EMAIL = `Your Zara Return Has Been Processed
-Hi Kaya, we've received your return. Since this was a final-sale promotional item, $22.50 has been issued as store credit to your Zara account, redeemable on your next online or in-store purchase. No expiration date.`;
-function loadDemoEmail(){ document.getElementById("emailPaste").value = DEMO_EMAIL; }
-
-async function aiParseEmail(text){
-  const res = await fetch("/api/parse",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({mode:"email", text})});
-  const data = await res.json();
-  if(!res.ok) throw new Error(data.error||"parse failed");
-  return JSON.parse(data.raw.replace(/```json|```/g,"").trim());
-}
-
 async function lookupPolicy(store){
   const res = await fetch("/api/parse",{
     method:"POST",headers:{"Content-Type":"application/json"},
@@ -765,38 +695,6 @@ async function lookupPolicy(store){
   if(!res.ok) throw new Error(data.error||"lookup failed");
   const match = data.raw.match(/\{[\s\S]*\}/);
   return match ? JSON.parse(match[0]) : null;
-}
-
-function localParseEmail(text){
-  const amtM = text.match(/\$([\d,]+\.?\d{0,2})/);
-  const amount = amtM ? parseFloat(amtM[1].replace(",","")) : 0;
-  let store = "Store";
-  for(const s of Object.keys(RETURN_WINDOWS)){ if(text.toLowerCase().includes(s)){ store = s[0].toUpperCase()+s.slice(1); break; } }
-  const isGift = /gift card/i.test(text);
-  const isCredit = /credit/i.test(text) && !/order confirmation|shipped|placed/i.test(text);
-  const kind = isCredit ? (isGift?"gift":"credit") : "return";
-  return { found:true, kind, store, amount, itemName: kind==="return" ? "Your order" : "", deadline:"", code:"" };
-}
-
-async function parseEmail(){
-  const text = document.getElementById("emailPaste").value.trim();
-  const status = document.getElementById("emailStatus");
-  if(!text){ toast("Paste an email first ✏️"); return; }
-  status.textContent = "👼 Halo is reading…";
-  let parsed, via="AI";
-  try{ parsed = await aiParseEmail(text); if(parsed.found===undefined) throw 0; }
-  catch(e){ parsed = localParseEmail(text); via="built-in parser"; }
-  if(!parsed.found){
-    status.textContent = "Couldn't classify that email — add it manually below.";
-    showReview("emailReview", {kind:"credit", store:"", amount:"", itemName:"", deadline:""});
-    return;
-  }
-  status.textContent = "Read via "+via+" ✓";
-  if(parsed.kind==="return" && !parsed.deadline){
-    const win = RETURN_WINDOWS[(parsed.store||"").toLowerCase()] ?? 30;
-    parsed.deadline = new Date(Date.now()+win*86400000).toISOString().slice(0,10);
-  }
-  showReview("emailReview", parsed);
 }
 
 function showReview(targetId, d){
