@@ -146,9 +146,11 @@ exchange, refresh, storage in `google_tokens`) stays exactly as-is in `/api/auth
    a "soonest deadline" banner, then two sections: **On the clock** (return windows +
    warranties, sorted soonest-first, color-coded countdown badges) and **Money available**
    (store credit + gift cards), plus a collapsed **Handled** section.
-2. **Add** — four entry points: Scan my inbox (Gmail), Paste one email, Add a gift card
-   photo, Log a warranty (manual form: item, store, purchase date, coverage length dropdown
-   → auto-computes deadline).
+2. **Add** — three entry points: Scan my inbox (Gmail, also detects extended-warranty
+   purchases — see "Gmail search tips" in `/api/gmail/scan.js`), Track my card (Plaid,
+   return windows only), Add a gift card photo. There's intentionally no manual
+   paste-an-email or log-a-warranty form anymore — those are meant to be caught
+   automatically by the scans above.
 3. **Detail sheet** (modal/bottom sheet) — for money items: card number + PIN with
    copy-to-clipboard, remaining balance, a "log partial usage" input, usage history. For
    clock items: big countdown, a "Check current policy & card benefits" button (calls
